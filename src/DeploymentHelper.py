@@ -50,12 +50,12 @@ def lambda_handler(event, context):
             logger.warn(f"No implementation for resourceType: {resourceType}")        
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, event['LogicalResourceId'])
     except Exception as e:
-        logger.info(f"Exception: {e}")
+        logger.error(f"Exception: {e}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {}, event['LogicalResourceId'])
 
 def delete_bucket_content(resourceProperties, requestType, event, context):    
     bucket = resourceProperties['BucketName']
-    logger.info(f"bucket: {bucket}, requestType: {requestType}")
+    logger.debug(f"bucket: {bucket}, requestType: {requestType}")
     if requestType == 'Delete':
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(bucket)
