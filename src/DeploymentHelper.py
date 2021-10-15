@@ -44,7 +44,7 @@ def lambda_handler(event, context):
     try:
         if resourceType == 'Custom::DeleteBucketContent':
             delete_bucket_content(resourceProperties, requestType, event, context)
-        if resourceType == 'Custom::CloudWatchDestination':
+        elif resourceType == 'Custom::CloudWatchDestination':
             cloudwatch_destinations(resourceProperties, requestType, event, context)
         else:
             logger.warn(f"No implementation for resourceType: {resourceType}")        
