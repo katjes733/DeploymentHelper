@@ -38,25 +38,29 @@ except KeyError as e:
 
 def lambda_handler(event, context):
     logger.info(f"event: {event}")
-    resourceProperties = event['ResourceProperties']
-    requestType = event['RequestType']
-    resourceType = event['ResourceType']
+    rp = event['ResourceProperties']
+    rt = event['RequestType']
+    rest = event['ResourceType']
+    lri = event['LogicalResourceId']
+    rv = {}
     try:
-        if resourceType == 'Custom::DeleteBucketContent':
-            delete_bucket_content(resourceProperties, requestType, event, context)
-        elif resourceType == 'Custom::CloudWatchDestination':
-            cloudwatch_destinations(resourceProperties, requestType, event, context)
+        if rest == 'Custom::DeleteBucketContent':
+            delete_bucket_content(rp, rt)
+        elif rest == 'Custom::CloudWatchDestination':
+            cloudwatch_destinations(rp, rt)
+        elif rest == 'Custom::GetHostedZoneId':
+            rv = get_hosted_zone_id(rp, rt)
         else:
-            logger.warn(f"No implementation for resourceType: {resourceType}")        
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, event['LogicalResourceId'])
+            logger.warn(f"No implementation for resourceType: {rest}")        
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, rv, lri)
     except Exception as e:
         logger.error(f"Exception: {e}")
-        cfnresponse.send(event, context, cfnresponse.FAILED, {}, event['LogicalResourceId'])
+        cfnresponse.send(event, context, cfnresponse.FAILED, {}, lri)
 
-def delete_bucket_content(resourceProperties, requestType, event, context):    
-    bucket = resourceProperties['BucketName']
-    logger.debug(f"bucket: {bucket}, requestType: {requestType}")
-    if requestType == 'Delete':
+def delete_bucket_content(rp, rt):    
+    bucket = rp['BucketName']
+    logger.debug(f"bucket: {bucket}, requestType: {rt}")
+    if rt == 'Delete':
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(bucket)
         time.sleep(60)
@@ -92,7 +96,7 @@ def create_cloudwatch_destinations(regions, destinationName, roleArn, kinesisStr
         }
         cw.put_destination_policy(destinationName=destinationName, accessPolicy= json.dumps(accessPolicy))
 
-def cloudwatch_destinations(rp, rt, event, context):
+def cloudwatch_destinations(rp, rt):
     cw = boto3.client('logs')
     allRegions = get_all_regions()
     if rt == 'Create' or rt == 'Update':
@@ -103,3 +107,14 @@ def cloudwatch_destinations(rp, rt, event, context):
 
     if rt == 'Delete':
         delete_cloudwatch_destinations(rp['DestinationName'], allRegions)
+
+def get_hosted_zone_id(rp, rt):
+    rv = {}
+    if rt != 'Delete':
+        dn = rp['DnsName']
+        r53 = boto3.client('route53')
+        r = r53.list_hosted_zones_by_name(DNSName=dn)
+        hzi = r['HostedZones'][0]['Id'].split("/")[-1]
+        logger.debug(f"Hosted zone ID: {hzi}")
+        rv = {"HostedZoneId": hzi}
+    return rv
