@@ -31,13 +31,13 @@ levels = {
     'debug': logging.DEBUG
 }
 logger = logging.getLogger()
-try:   
+try:
     logger.setLevel(levels.get(os.getenv('LOG_LEVEL', 'info').lower()))
 except KeyError as e:
     logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    logger.info(f"event: {event}")
+    logger.info("event: %s", event)
     rp = event['ResourceProperties']
     rt = event['RequestType']
     rest = event['ResourceType']
@@ -51,21 +51,21 @@ def lambda_handler(event, context):
         elif rest == 'Custom::GetHostedZoneId':
             rv = get_hosted_zone_id(rp, rt)
         else:
-            logger.warn(f"No implementation for resourceType: {rest}")        
+            logger.warning("No implementation for resourceType: %s", rest)
         cfnresponse.send(event, context, cfnresponse.SUCCESS, rv, lri)
-    except Exception as e:
-        logger.error(f"Exception: {e}")
+    except Exception as ex:
+        logger.error("Exception: %s", ex)
         cfnresponse.send(event, context, cfnresponse.FAILED, {}, lri)
 
-def delete_bucket_content(rp, rt):    
+def delete_bucket_content(rp, rt):
     bucket = rp['BucketName']
-    logger.debug(f"bucket: {bucket}, requestType: {rt}")
+    logger.debug("bucket: %s, requestType: %s", bucket, rt)
     if rt == 'Delete':
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(bucket)
         time.sleep(60)
         bucket.objects.all().delete()
-        bucket.object_versions.all().delete()  
+        bucket.object_versions.all().delete()
 
 def get_all_regions():
     return list(map(lambda e: e['RegionName'], filter(lambda e: e['RegionName'] != 'ap-northeast-3', boto3.client('ec2').describe_regions()['Regions'])))
@@ -75,8 +75,8 @@ def delete_cloudwatch_destinations(destinationName, regions):
         cw = boto3.client('logs', region_name=r)
         try:
             cw.delete_destination(destinationName=destinationName)
-        except cw.exceptions.ResourceNotFoundException as nf:
-            logger.debug(f"Destination {destinationName} does not exist in {r}.")
+        except cw.exceptions.ResourceNotFoundException:
+            logger.debug("Destination %s does not exist in %s.", destinationName, r)
 
 def create_cloudwatch_destinations(regions, destinationName, roleArn, kinesisStreamArn, spokeAccounts):
     for r in regions:
@@ -97,11 +97,10 @@ def create_cloudwatch_destinations(regions, destinationName, roleArn, kinesisStr
         cw.put_destination_policy(destinationName=destinationName, accessPolicy= json.dumps(accessPolicy))
 
 def cloudwatch_destinations(rp, rt):
-    cw = boto3.client('logs')
     allRegions = get_all_regions()
     if rt == 'Create' or rt == 'Update':
         regions = allRegions if rp['Regions'] else rp['Regions']
-        if all(r in regions for r in allRegions):    
+        if all(r in regions for r in allRegions):
             delete_cloudwatch_destinations(rp['DestinationName'], regions)
             create_cloudwatch_destinations(regions, rp['DestinationName'], rp['RoleArn'], rp['DataStreamArn'], rp['SpokeAccounts'])
 
@@ -115,6 +114,6 @@ def get_hosted_zone_id(rp, rt):
         r53 = boto3.client('route53')
         r = r53.list_hosted_zones_by_name(DNSName=dn)
         hzi = r['HostedZones'][0]['Id'].split("/")[-1]
-        logger.debug(f"Hosted zone ID: {hzi}")
+        logger.debug("Hosted zone ID: %s", hzi)
         rv = {"HostedZoneId": hzi}
     return rv
